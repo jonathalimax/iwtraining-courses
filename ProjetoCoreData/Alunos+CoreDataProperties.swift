@@ -19,5 +19,6 @@ extension Alunos {
     @NSManaged public var email: String?
     @NSManaged public var nome: String?
     @NSManaged public var telefone: String?
+    @NSManaged public var foto: Data?
 
 }

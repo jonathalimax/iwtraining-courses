@@ -8,8 +8,9 @@
 
 import UIKit
 import CoreData
+import MobileCoreServices
 
-class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSource {
+class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSource, UISearchBarDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     
     @IBOutlet weak var txtNome:UITextField!
     @IBOutlet weak var txtEmail:UITextField!
@@ -17,6 +18,7 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
     @IBOutlet weak var tblAluno:UITableView!
     var alunos:[Alunos]!
     var indexRow: Int?
+    var filtro: String?
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -24,7 +26,6 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
         tblAluno.delegate = self
         tblAluno.dataSource = self
         alunos = []
-        
         self.carregarAlunos()
     }
     
@@ -36,18 +37,13 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
         
         if indexRow != nil {
             
-            let alunoSelecionado = alunos[indexRow!]
-            alunoSelecionado.nome = txtNome.text
-            alunoSelecionado.email = txtEmail.text
-            alunoSelecionado.telefone = txtTelefone.text
+            let aluno = alunos[indexRow!]
+            aluno.nome = txtNome.text
+            aluno.email = txtEmail.text
+            aluno.telefone = txtTelefone.text
             
-            do {
-                try self.getContext().save()
-                self.carregarAlunos()
-                self.indexRow = nil
-            } catch let err {
-                print("\(err.localizedDescription)")
-            }
+            self.atualizarAlunoNoBanco()
+            
         }
     }
     
@@ -72,10 +68,16 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
     func carregarAlunos() {
         let request = NSFetchRequest<NSFetchRequestResult>(entityName: "Alunos")
         
+        if filtro != nil {
+            request.predicate = NSPredicate(format: "nome contains[c] %@", filtro!)
+        }
+        
         do {
             alunos = try getContext().fetch(request) as! [Alunos]
             
             tblAluno.reloadData()
+            
+            filtro = nil
             
         } catch let err {
             print("\(err.localizedDescription)")
@@ -131,17 +133,40 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
         
         cell?.textLabel?.text = alunos[indexPath.row].nome
         cell?.detailTextLabel?.text = alunos[indexPath.row].email
+        cell?.accessoryType = .detailButton
         
+        if alunos[indexPath.row].foto != nil {
+            cell?.imageView?.image = UIImage(data: alunos[indexPath.row].foto!)
+        }
         return cell!
+    }
+    
+    func tableView(_ tableView: UITableView, accessoryButtonTappedForRowWith indexPath: IndexPath) {
+        print("\(alunos[indexPath.row].telefone)")
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         
-        indexRow = indexPath.row
+        self.indexRow = indexPath.row
         
-        txtNome.text = alunos[indexRow!].nome
-        txtEmail.text = alunos[indexRow!].email
-        txtTelefone.text = alunos[indexRow!].telefone
+        let alert = UIAlertController(title: "Fotografia", message: "Escolha uma opção", preferredStyle: .actionSheet)
+        alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel, handler: nil))
+        
+        alert.addAction(UIAlertAction(title: "Tirar Foto", style: .default, handler: { (UIAlertAction) in
+            
+            self.camera()
+            
+        }))
+        
+        alert.addAction(UIAlertAction(title: "Editar Cadastro", style: .default, handler: { (UIAlertAction) in
+            
+            self.txtNome.text = self.alunos[self.indexRow!].nome
+            self.txtEmail.text = self.alunos[self.indexRow!].email
+            self.txtTelefone.text = self.alunos[self.indexRow!].telefone
+            
+        }))
+        
+        present(alert, animated: true, completion: nil)
         
     }
     
@@ -157,6 +182,70 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
         let alerta = UIAlertController(title: "Os dados foram armazenados!", message: "", preferredStyle: .alert)
         alerta.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
         self.present(alerta, animated: true, completion: nil)
+    }
+    
+    // UISearchBarDelegate
+    
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        print("\(searchText)")
+        
+        if searchText != "" {
+            filtro = searchText
+            carregarAlunos()
+        } else {
+            carregarAlunos()
+        }
+        
+    }
+    
+    // funcs
+    
+    func camera() {
+        let pickerController = UIImagePickerController()
+        pickerController.delegate = self
+        pickerController.sourceType = UIImagePickerControllerSourceType.camera
+        
+        self.present(pickerController, animated: true, completion: nil)
+    }
+    
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [String : Any]) {
+        
+        let imageOriginal = info[UIImagePickerControllerOriginalImage] as! UIImage
+        let imageEditada = info[UIImagePickerControllerEditedImage] as? UIImage
+        
+        let foto: UIImage
+        
+        if imageEditada == nil {
+            foto = imageOriginal
+            print("Imagem Original")
+        } else {
+            foto = imageEditada!
+            print("Image Editada")
+        }
+        
+        // UPDATE NO BANCO
+        
+        alunos[indexRow!].foto = UIImageJPEGRepresentation(foto, 1.0)
+        
+        self.atualizarAlunoNoBanco()
+        
+        self.dismiss(animated: true, completion: nil)
+    }
+    
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        self.dismiss(animated: true, completion: nil)
+    }
+    
+    func atualizarAlunoNoBanco() {
+        
+        do {
+            try self.getContext().save()
+            self.carregarAlunos()
+            self.indexRow = nil
+        } catch let err {
+            print("\(err.localizedDescription)")
+        }
+        
     }
 }
 
